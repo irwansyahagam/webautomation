@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: webauto_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./app/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  selenium:
+    image: selenium/standalone-chrome:latest
+    container_name: webauto_selenium
+    restart: unless-stopped
+    shm_size: 2gb
+    ports:
+      - "4444:4444"   # Selenium WebDriver endpoint
+      - "7900:7900"   # noVNC - buka di browser untuk lihat proses otomasi secara live
+
+  app:
+    build: ./app
+    container_name: webauto_app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      selenium:
+        condition: service_started
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      SELENIUM_URL: http://selenium:4444/wd/hub
+    volumes:
+      - ./app:/app
+      - app_screenshots:/app/screenshots
+
+  adminer:
+    image: adminer
+    container_name: webauto_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql
+
+volumes:
+  mysql_data:
+  app_screenshots:
